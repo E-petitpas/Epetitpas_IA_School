@@ -25,6 +25,13 @@ class SupabaseService {
   }
 
   /**
+   * Get auth client for authentication operations
+   */
+  get auth() {
+    return this.client.auth;
+  }
+
+  /**
    * Verify JWT token and get user info
    */
   async verifyToken(token: string): Promise<SupabaseUser | null> {

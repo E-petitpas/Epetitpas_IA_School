@@ -9,7 +9,10 @@ import { testDatabaseConnection } from './database';
 import { ResponseUtil } from './utils/response';
 
 // Import routes
+import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
+import aiRoutes from './routes/aiRoutes';
+import revisionRoutes from './routes/revisionRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -82,11 +85,19 @@ app.get('/health', async (req, res) => {
 // API version prefix
 const API_PREFIX = '/api/v1';
 
+// Authentication routes
+app.use(`${API_PREFIX}/auth`, authRoutes);
+
 // User management routes
 app.use(`${API_PREFIX}/users`, userRoutes);
 
+// AI Questions routes
+app.use(`${API_PREFIX}/questions`, aiRoutes);
+
+// Revision sheets routes
+app.use(`${API_PREFIX}/revision-sheets`, revisionRoutes);
+
 // TODO: Add more routes
-// app.use(`${API_PREFIX}/questions`, questionRoutes);
 // app.use(`${API_PREFIX}/subscriptions`, subscriptionRoutes);
 // app.use(`${API_PREFIX}/admin`, adminRoutes);
 

@@ -88,6 +88,8 @@ export const paginationSchema = z.object({
   .refine(data => data.limit >= 1 && data.limit <= 100, { message: 'Limit must be between 1 and 100', path: ['limit'] });
 
 export const questionFilterSchema = z.object({
+  page: z.string().regex(/^\d+$/).transform(Number).default('1'),
+  limit: z.string().regex(/^\d+$/).transform(Number).default('20'),
   subject: z.string().optional(),
   gradeLevel: z.string().optional(),
   questionType: z.enum(['explanation', 'exercise', 'quiz']).optional(),
@@ -95,7 +97,8 @@ export const questionFilterSchema = z.object({
   search: z.string().optional(),
   sortBy: z.enum(['createdAt', 'updatedAt', 'subject', 'gradeLevel']).optional().default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc')
-}).merge(paginationSchema);
+}).refine(data => data.page >= 1, { message: 'Page must be >= 1', path: ['page'] })
+  .refine(data => data.limit >= 1 && data.limit <= 100, { message: 'Limit must be between 1 and 100', path: ['limit'] });
 
 // ===============================
 // ADMIN VALIDATION SCHEMAS
