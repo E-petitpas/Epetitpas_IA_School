@@ -1,0 +1,262 @@
+// ========================================
+// E-petitpas AI School - Prisma Schema
+// Backend: Node.js (Express) + Supabase
+// ========================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===============================
+// ENUMS
+// ===============================
+
+enum Role {
+  USER
+  ADMIN
+  PARENT // post-MVP
+  STUDENT // post-MVP
+}
+
+enum StatutCompte {
+  ACTIF
+  INACTIF
+  BLOQUE
+  EN_ATTENTE_VALIDATION
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
+enum ExportFormat {
+  PDF
+  WORD
+  TXT
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAYPAL
+  CREDIT_PURCHASE // post-MVP
+}
+
+enum PaymentStatusEnum {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  PENDING
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// ===============================
+// TABLES MVP - CORE FEATURES
+// ===============================
+
+// Utilisateurs
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  name              String
+  role              Role              @default(USER)
+  statutCompte      StatutCompte      @default(ACTIF)
+  emailVerifiedAt   DateTime?
+  profileImage      String?
+  preferences       Json?             // extensible
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  subscriptions     UserSubscription[]
+  questions         AIQuestion[]
+  quotas           DailyQuota[]
+  revisionSheets   RevisionSheet[]
+  payments         Payment[]
+  invoices         Invoice[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// Plans d'abonnement
+model SubscriptionPlan {
+  id                   String            @id @default(cuid())
+  name                 String            @unique // freemium, standard, premium, pro
+  price                Decimal           @db.Decimal(10, 2)
+  dailyQuestionsLimit  Int
+  canGenerateQuizzes   Boolean           @default(false) // post-MVP
+  canExportFiles       Boolean           @default(false)
+  hasAdvancedStats     Boolean           @default(false) // post-MVP
+  features             Json?             // extensible
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  // Relations
+  subscriptions        UserSubscription[]
+
+  @@map("subscription_plans")
+}
+
+// Abonnements utilisateurs (avec historique)
+model UserSubscription {
+  id                   String                @id @default(cuid())
+  userId               String
+  planId               String
+  status               SubscriptionStatus    @default(ACTIVE)
+  startDate            DateTime              @default(now())
+  endDate              DateTime?
+  stripeSubscriptionId String?
+  autoRenew            Boolean               @default(true)
+  metadata             Json?                 // extensible
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  // Relations
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                 SubscriptionPlan      @relation(fields: [planId], references: [id])
+  payments             Payment[]
+  invoices             Invoice[]
+
+  @@index([userId])
+  @@index([status, endDate])
+  @@map("user_subscriptions")
+}
+
+// Questions IA
+model AIQuestion {
+  id              String    @id @default(cuid())
+  userId          String
+  subject         String    // Mathematics, Physics, etc.
+  gradeLevel      String    // Terminale, BTS SIO, etc.
+  questionText    String    @db.Text
+  aiResponse      String    @db.Text
+  steps           Json?     // Étapes détaillées
+  quiz            Json?     // Quiz générés
+  questionType    String?   // 'explanation', 'exercise', 'quiz'
+  tokensUsed      Int?
+  responseTimeMs  Int?
+  difficulty      String?   // post-MVP (analytics)
+  satisfaction    Int?      // post-MVP (feedback)
+  isBookmarked    Boolean   @default(false)
+  tags            String[]  // Pour la recherche
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([subject])
+  @@index([gradeLevel])
+  @@map("ai_questions")
+}
+
+// Quotas journaliers
+model DailyQuota {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime @db.Date
+  questionsUsed  Int      @default(0)
+  questionsLimit Int
+  creditsUsed    Int      @default(0) // post-MVP
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_quotas")
+}
+
+// Fiches de révision
+model RevisionSheet {
+  id             String       @id @default(cuid())
+  userId         String
+  title          String
+  subject        String
+  gradeLevel     String
+  content        String       @db.Text
+  filePath       String?
+  exportFormat   ExportFormat @default(PDF)
+  downloadCount  Int          @default(0) // post-MVP
+  sharedWith     Json?        // post-MVP (partage)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("revision_sheets")
+}
+
+// Paiements
+model Payment {
+  id                String              @id @default(cuid())
+  userId            String
+  invoiceId         String?             // lien avec facture
+  subscriptionId    String?             // lien avec UserSubscription
+  amount            Decimal             @db.Decimal(10, 2)
+  currency          String              @default("EUR")
+  paymentMethod     PaymentMethod       @default(STRIPE)
+  externalPaymentId String?             // Stripe, PayPal, etc.
+  status            PaymentStatusEnum   @default(PENDING)
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  user              User                @relation(fields: [userId], references: [id])
+  subscription      UserSubscription?   @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoice           Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
+}
+
+// Factures
+model Invoice {
+  id                String         @id @default(cuid())
+  userId            String
+  subscriptionId    String?
+  invoiceNumber     String         @unique
+  amount            Decimal        @db.Decimal(10, 2)
+  taxAmount         Decimal        @db.Decimal(10, 2) @default(0)
+  totalAmount       Decimal        @db.Decimal(10, 2)
+  currency          String         @default("EUR")
+  status            InvoiceStatus  @default(PENDING)
+  issuedAt          DateTime       @default(now())
+  dueDate           DateTime
+  paidAt            DateTime?
+  pdfUrl            String?
+  creditPurchaseId  String?        // post-MVP
+  lineItems         Json?          // détail facture
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relations
+  user              User           @relation(fields: [userId], references: [id])
+  subscription      UserSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  payments          Payment[]
+
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
