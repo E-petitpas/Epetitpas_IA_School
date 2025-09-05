@@ -2,26 +2,21 @@
 // E-petitpas AI School - Admin App
 // ========================================
 
-import React, { useState } from 'react';
-import { useAuth } from '../../core/auth/context';
-import { Button } from "../../components/ui/button";
-import { Badge } from "../../components/ui/badge";
-import { Shield, BarChart3, Users, CreditCard, Menu, Settings, User, LogOut, UserCheck } from "lucide-react";
-import { AdminDashboard } from "../../components/AdminDashboard";
-import { UserManagementPage } from "../../components/UserManagementPage";
-import { SubscriptionManagementPage } from "../../components/SubscriptionManagementPage";
-import { AdminSecurityPage } from "../../components/AdminSecurityPage";
-import { Logo } from "../../components/Logo";
+import React, {useState} from 'react';
+import {useAuth} from '../../core/auth/context';
+import {Button} from "../../components/ui/button";
+import {Badge} from "../../components/ui/badge";
+import {BarChart3, CreditCard, LogOut, Menu, Shield, UserCheck, Users} from "lucide-react";
+import {AdminDashboard} from "../../components/AdminDashboard";
+import {UserManagementPage} from "../../components/UserManagementPage";
+import {SubscriptionManagementPage} from "../../components/SubscriptionManagementPage";
+import {AdminSecurityPage} from "../../components/AdminSecurityPage";
+import {Logo} from "../../components/Logo";
 
 export const AdminApp: React.FC = () => {
   const { user, signout } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const onRoleSwitch = (role: 'student' | 'admin') => {
-    // TODO: Implement role switching logic with new auth system
-    console.log('Role switch requested:', role);
-  };
 
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: BarChart3, color: "red" },
@@ -92,7 +87,6 @@ export const AdminApp: React.FC = () => {
             </div>
             
             <Button
-              onClick={() => onRoleSwitch('student')}
               variant="outline"
               size="sm"
               className="text-blue-600 border-blue-200 hover:bg-blue-50"

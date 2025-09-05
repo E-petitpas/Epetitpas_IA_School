@@ -2,15 +2,15 @@
 // E-petitpas AI School - Student App
 // ========================================
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../core/auth/context';
-import { Button } from "../../components/ui/button";
-import { Badge } from "../../components/ui/badge";
-import { Brain, Home, BookOpen, Settings, Menu, History, User, LogOut, Shield, CreditCard } from "lucide-react";
-import { StudentDashboard } from "../../components/StudentDashboard";
-import { StudentSettingsPage } from "../../components/StudentSettingsPage";
-import { QuestionHistory } from "../../components/QuestionHistory";
-import { Logo } from "../../components/Logo";
+import React, {useEffect, useState} from 'react';
+import {useAuth} from '../../core/auth/context';
+import {Button} from "../../components/ui/button";
+import {Badge} from "../../components/ui/badge";
+import {History, Home, LogOut, Menu, Settings, Shield, User} from "lucide-react";
+import {StudentDashboard} from "../../components/StudentDashboard";
+import {StudentSettingsPage} from "../../components/StudentSettingsPage";
+import {QuestionHistory} from "../../components/QuestionHistory";
+import {Logo} from "../../components/Logo";
 
 export const StudentApp: React.FC = () => {
   const { user, signout } = useAuth();
@@ -26,11 +26,6 @@ export const StudentApp: React.FC = () => {
     // Using default usage values for development mode with new architecture
     console.log('Using default usage values for development mode');
     setDailyUsage(prev => ({ ...prev, used: Math.floor(Math.random() * 5) })); // Random for demo
-  };
-
-  const onRoleSwitch = (role: 'student' | 'admin') => {
-    // TODO: Implement role switching logic with new auth system
-    console.log('Role switch requested:', role);
   };
 
   const navigation = [
@@ -105,7 +100,6 @@ export const StudentApp: React.FC = () => {
             
             {user?.role === 'ADMIN' && (
               <Button
-                onClick={() => onRoleSwitch('admin')}
                 variant="outline"
                 size="sm"
                 className="text-orange-600 border-orange-200 hover:bg-orange-50"
