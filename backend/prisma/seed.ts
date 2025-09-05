@@ -125,7 +125,7 @@ async function main() {
       create: {
         email: 'student@test.fr',
         name: 'Étudiant Test',
-        role: 'USER',
+        role: 'STUDENT',
         statutCompte: 'ACTIF',
         emailVerifiedAt: new Date(),
         preferences: {

@@ -1,51 +1,48 @@
-import { Button } from "./ui/button";
-import { Card } from "./ui/card";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { 
-  Brain, 
-  Mail, 
-  Lock, 
-  User, 
-  Shield, 
-  Eye, 
-  EyeOff,
-  UserPlus,
-  LogIn,
+// ========================================
+// E-petitpas AI School - Auth App
+// ========================================
+
+import React, {useState} from 'react';
+import {useAuth} from '../../core/auth/context';
+import {Button} from "../../components/ui/button";
+import {Card} from "../../components/ui/card";
+import {Input} from "../../components/ui/input";
+import {Label} from "../../components/ui/label";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "../../components/ui/select";
+import {
   AlertCircle,
+  Brain,
+  Check,
+  Eye,
+  EyeOff,
   Loader2,
-  BookOpen,
-  Zap,
+  Lock,
+  LogIn,
+  Mail,
+  Shield,
   Star,
-  Check
+  User,
+  UserPlus,
+  Zap
 } from "lucide-react";
-import { Logo } from "./Logo";
-import { useEffect, useState } from "react";
-import { supabase } from '../utils/supabase/client';
-import { useAuthStore } from '../core/auth/store';
-import { useRoleErrorMessages } from '../core/auth/hooks';
+import {Logo} from "../../components/Logo";
 
 type Mode = "signin" | "signup";
 type UserType = "student" | "admin";
 
-interface AuthPageProps {
-  onAuthSuccess: (userId: string) => void;
-  session?: { access_token?: string } | null;
-}
-
-export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
+export const AuthApp: React.FC = () => {
+  const { signup, signin, loading } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [userType, setUserType] = useState<UserType>("student");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [hasTriedLogin, setHasTriedLogin] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState<boolean | null>(null);
   
-  // Use Zustand store for form data persistence
-  const { formData, setFormData } = useAuthStore();
-  const { showRoleMismatchError, showAccountStatusError } = useRoleErrorMessages();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    academicLevel: ''
+  });
 
   const academicLevels = [
     { value: 'CE1', label: 'CE1' },
@@ -59,135 +56,43 @@ export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
   ];
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData({ [field]: value });
+    setFormData(prev => ({ ...prev, [field]: value }));
     setError('');
   };
 
-  // Prefill from VITE_ env in dev for convenience
-  useEffect(() => {
-    const prefillEmail = import.meta.env.VITE_PREFILL_EMAIL as string | undefined;
-    const prefillPassword = import.meta.env.VITE_PREFILL_PASSWORD as string | undefined;
-    const prefillName = import.meta.env.VITE_PREFILL_NAME as string | undefined;
-    if (prefillEmail) setFormData({ email: prefillEmail });
-    if (prefillPassword) setFormData({ password: prefillPassword });
-    if (prefillName) setFormData({ name: prefillName });
-  }, []);
-
   const handleSignin = async () => {
     setError('');
-    setLoading(true);
-    setHasTriedLogin(true);
-    
     try {
-      // First validate credentials and role with backend
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/v1/auth/validate-login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          expectedRole: userType === 'admin' ? 'ADMIN' : 'STUDENT'
-        }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.message || 'Login validation failed');
-      }
-
-      // Backend validation successful, now signin with Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email: formData.email, 
-        password: formData.password 
-      });
-      
-      if (error) throw error;
-      
-      // Track email confirmation state from returned user
-      setEmailConfirmed(!!data.user?.email_confirmed_at);
-      
-      // Get user ID
-      const userId = data.user?.id;
-      if (!userId) {
-        throw new Error('No user ID found');
-      }
-
-      // All validations passed - proceed with authentication
-      onAuthSuccess(userId);
-      
+      await signin(formData.email, formData.password);
     } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+      setError(error.message || 'Erreur de connexion');
     }
   };
 
   const handleSignup = async () => {
     setError('');
-    setLoading(true);
-
     try {
-      // Détermine le rôle et statut selon le type sélectionné
-      const isAdmin = userType === 'admin';
-      const userRole = isAdmin ? 'ADMIN' : 'STUDENT';
-      const accountStatus = isAdmin ? 'EN_ATTENTE_VALIDATION' : 'ACTIF';
-
-      const { data, error } = await supabase.auth.signUp({
+      await signup({
         email: formData.email,
         password: formData.password,
-        options: { 
-          data: { 
-            full_name: formData.name || "User", 
-            academic_level: formData.academicLevel || null,
-            role: userRole,
-            statutCompte: accountStatus,
-            // Pour admin : sera traité par le backend pour créer AdminValidation
-            requestAdminValidation: isAdmin
-          } 
+        name: formData.name || "Student",
+        preferences: {
+          academic_level: formData.academicLevel || 'CE1',
+          subjects: ['Mathematics'],
+          language: 'fr',
+          theme: 'light'
         }
       });
-      
-      if (error) throw error;
-
-      // Pour les admins, afficher un message spécifique
-      if (isAdmin) {
-        // Ne pas rediriger, rester sur la page avec message
-        setError('');
-        // Message de succès pour admin sera affiché via toast ou message de confirmation
-        alert('Admin account created! Please check your email to confirm, then wait for manual approval.');
-      } else {
-        // Pour les utilisateurs normaux, continuer le flow normal
-        await new Promise(r => setTimeout(r, 300));
-        const userId = data.user?.id;
-        if (userId) onAuthSuccess(userId);
-      }
     } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+      setError(error.message || 'Erreur lors de l\'inscription');
     }
   };
 
-  // @ts-ignore
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "signin") await handleSignin();
     else await handleSignup();
   };
-
-  // Keep emailConfirmed in sync with current session when component mounts or session prop changes
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        setEmailConfirmed(!!data.session?.user?.email_confirmed_at);
-      } catch {
-        // ignore
-      }
-    })();
-  }, [session?.access_token]);
 
   const features = [
     { icon: Brain, text: "AI-powered personalized tutoring" },
@@ -302,11 +207,7 @@ export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
               {/* Mode Selection */}
               <div className="flex gap-2 mb-6">
                 <button
-                  onClick={() => {
-                    setMode("signin");
-                    setHasTriedLogin(false);
-                    setError('');
-                  }}
+                  onClick={() => setMode("signin")}
                   className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                     mode === "signin" 
                       ? `${userType === "admin" ? 'bg-red-600 text-white' : 'bg-gradient-to-r from-blue-600 to-green-600 text-white'} shadow-md` 
@@ -316,11 +217,7 @@ export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
                   Sign in
                 </button>
                 <button
-                  onClick={() => {
-                    setMode("signup");
-                    setHasTriedLogin(false); // Reset login attempt when switching modes
-                    setError('');
-                  }}
+                  onClick={() => setMode("signup")}
                   className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
                     mode === "signup" 
                       ? `${userType === "admin" ? 'bg-red-600 text-white' : 'bg-gradient-to-r from-blue-600 to-green-600 text-white'} shadow-md` 
@@ -343,37 +240,12 @@ export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
                 </p>
               </div>
 
-              {/* Email confirmation warning - only show if user tried to login AND email is not confirmed */}
-              {session?.access_token && hasTriedLogin && emailConfirmed === false && (
-                <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-                      <AlertCircle className="w-4 h-4 text-orange-600" />
-                    </div>
-                    <h4 className="font-semibold text-orange-800">Email not confirmed</h4>
-                  </div>
-                  <p className="text-sm text-orange-700 mb-3">
-                    You are signed in but your email is not yet confirmed. 
-                    Check your inbox and click the confirmation link.
-                  </p>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => window.location.reload()} 
-                      className="text-xs bg-orange-600 text-white px-3 py-1.5 rounded-lg hover:bg-orange-700 transition-colors font-medium"
-                    >
-                      Refresh page
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {error && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
-
 
               <form onSubmit={onSubmit} className="space-y-4">
                 {mode === "signup" && (
@@ -518,4 +390,4 @@ export function AuthPage({ onAuthSuccess, session }: AuthPageProps) {
       </div>
     </div>
   );
-}
+};

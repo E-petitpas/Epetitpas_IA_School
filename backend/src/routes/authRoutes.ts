@@ -52,6 +52,12 @@ const resetPasswordSchema = z.object({
   new_password: z.string().min(8, 'Password must be at least 8 characters')
 });
 
+const validateLoginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+  expectedRole: z.enum(['STUDENT', 'ADMIN'], 'Expected role must be STUDENT or ADMIN')
+});
+
 // ===============================
 // PUBLIC AUTHENTICATION ROUTES
 // ===============================
@@ -114,6 +120,16 @@ router.post(
   '/reset-password',
   validateSchema(resetPasswordSchema),
   AuthController.resetPassword
+);
+
+/**
+ * POST /api/v1/auth/validate-login
+ * Validate login credentials with role verification
+ */
+router.post(
+  '/validate-login',
+  validateSchema(validateLoginSchema),
+  AuthController.validateLogin
 );
 
 // ===============================

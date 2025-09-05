@@ -12,7 +12,7 @@ import { Role } from '../../generated/prisma';
 export const createUserSchema = z.object({
   email: z.string().email('Invalid email format'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  role: z.nativeEnum(Role).optional().default('USER'),
+  role: z.nativeEnum(Role).optional().default('STUDENT'),
   preferences: z.object({
     academic_level: z.string().optional(),
     subjects: z.array(z.string()).optional(),

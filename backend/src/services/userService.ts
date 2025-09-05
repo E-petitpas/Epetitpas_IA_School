@@ -117,7 +117,7 @@ export class UserService {
       data: {
         email: data.email,
         name: data.name,
-        role: data.role || 'USER',
+        role: data.role || 'STUDENT',
         statutCompte: createdByAdmin ? 'ACTIF' : 'EN_ATTENTE_VALIDATION',
         preferences: data.preferences || {},
         emailVerifiedAt: createdByAdmin ? new Date() : null

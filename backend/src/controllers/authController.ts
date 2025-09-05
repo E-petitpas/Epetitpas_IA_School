@@ -68,48 +68,56 @@ export class AuthController {
    */
   static async signin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { email, password } = req.body;
+      const { email, password, expectedRole } = req.body as { email: string; password: string; expectedRole?: string };
 
-      const { data, error } = await supabaseService.auth.signInWithPassword({
-        email,
-        password
-      });
+      // 1) Validate user in our DB first (role and status)
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (!existingUser) {
+        res.status(404).json({ success: false, error: 'User not found. Please sign up first.' });
+        return;
+      }
 
+      if (expectedRole && existingUser.role !== expectedRole) {
+        res.status(403).json({ success: false, error: `Role mismatch. Expected ${expectedRole}, found ${existingUser.role}.` });
+        return;
+      }
+
+      if (existingUser.statutCompte !== 'ACTIF') {
+        res.status(403).json({ success: false, error: `Account status is ${existingUser.statutCompte}. Contact support.` });
+        return;
+      }
+
+      // 2) If validation passed, sign in to Supabase to get tokens
+      const { data, error } = await supabaseService.auth.signInWithPassword({ email, password });
       if (error) {
-        ResponseUtil.unauthorized(res, error.message);
+        res.status(401).json({ success: false, error: error.message });
         return;
       }
 
       if (!data.user || !data.session) {
-        ResponseUtil.unauthorized(res, 'Invalid credentials');
+        res.status(401).json({ success: false, error: 'Invalid credentials' });
         return;
       }
 
-      // Get user profile from our database
-      const userProfile = await prisma.user.findUnique({
-        where: { email: data.user.email! }
-      });
-
-      if (!userProfile) {
-        ResponseUtil.notFound(res, 'User profile not found');
-        return;
-      }
-
-      ResponseUtil.success(res, {
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-          name: userProfile.name,
-          role: userProfile.role,
-          preferences: userProfile.preferences,
-          emailConfirmed: !!data.user.email_confirmed_at
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            name: existingUser.name,
+            role: existingUser.role,
+            preferences: existingUser.preferences,
+            emailConfirmed: !!data.user.email_confirmed_at
+          },
+          session: {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at
+          }
         },
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at
-        }
-      }, 'Signed in successfully');
+        message: 'Signed in successfully'
+      });
     } catch (error) {
       next(error);
     }
@@ -287,6 +295,104 @@ export class AuthController {
         createdAt: userProfile.createdAt,
         updatedAt: userProfile.updatedAt
       }, 'Profile retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/validate-login
+   * Validate login credentials with role verification
+   */
+  static async validateLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, password, expectedRole } = req.body;
+
+      // Try to authenticate with Supabase
+      const { data: authData, error: authError } = await supabaseService.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (authError) {
+        ResponseUtil.unauthorized(res, 'Invalid email or password');
+        return;
+      }
+
+      // Sign out immediately - we only needed to validate credentials
+      await supabaseService.auth.signOut();
+
+      const supaUser = authData.user;
+      if (!supaUser?.email) {
+        ResponseUtil.error(res, 'User not found', 400);
+        return;
+      }
+
+      // Find by email first to avoid ID mismatch issues
+      let user = await prisma.user.findUnique({
+        where: { email: supaUser.email },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          statutCompte: true,
+          name: true
+        }
+      });
+
+      // If not found, create a profile aligned with Supabase user
+      if (!user) {
+        const inferredRole = (supaUser.user_metadata?.role as any) === 'ADMIN' ? 'ADMIN' : 'STUDENT';
+        const statut = inferredRole === 'ADMIN' ? 'EN_ATTENTE_VALIDATION' : 'ACTIF';
+        const created = await prisma.user.create({
+          data: {
+            id: supaUser.id,
+            email: supaUser.email,
+            name: (supaUser.user_metadata?.full_name as string) || 'User',
+            role: inferredRole,
+            statutCompte: statut,
+            emailVerifiedAt: supaUser.email_confirmed_at ? new Date(supaUser.email_confirmed_at) : null,
+            preferences: supaUser.user_metadata || {}
+          },
+          select: { id: true, email: true, role: true, statutCompte: true, name: true }
+        });
+        user = created;
+      }
+
+      // Check role match
+      if (user.role !== expectedRole) {
+        const actualUserType = user.role === 'ADMIN' ? 'Admin' : 'Student';
+        const selectedUserType = expectedRole === 'ADMIN' ? 'Admin' : 'Student';
+        
+        ResponseUtil.error(res, 
+          `You are a ${actualUserType} but selected ${selectedUserType} login. Please select the correct user type.`, 403, 'ROLE_MISMATCH');
+        return;
+      }
+
+      // Check account status
+      if (user.statutCompte !== 'ACTIF') {
+        let message = '';
+        
+        if (user.role === 'ADMIN' && user.statutCompte === 'EN_ATTENTE_VALIDATION') {
+          message = 'Admin account pending validation. Please wait for approval.';
+        } else {
+          message = `Account status: ${user.statutCompte}. Please contact support.`;
+        }
+        
+        ResponseUtil.error(res, message, 403, 'ACCOUNT_STATUS');
+        return;
+      }
+
+      // All validations passed
+      ResponseUtil.success(res, {
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: user.name
+        }
+      }, 'Login validation successful');
+
     } catch (error) {
       next(error);
     }

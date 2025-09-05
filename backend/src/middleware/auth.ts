@@ -43,18 +43,22 @@ export async function authenticateToken(
     }
 
     // Get or create user profile in our database
-    let user = await prisma.user.findUnique({
-      where: { id: supabaseUser.id }
-    });
+    // First, try by Supabase ID
+    let user = await prisma.user.findUnique({ where: { id: supabaseUser.id } });
 
-    // If user doesn't exist in our DB, create from Supabase data
+    // If not found by ID, try by email (to avoid unique email conflicts)
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email: supabaseUser.email } });
+    }
+
+    // If still not found, create from Supabase data
     if (!user) {
       user = await prisma.user.create({
         data: {
           id: supabaseUser.id,
           email: supabaseUser.email,
-          name: supabaseUser.user_metadata.full_name || 'User',
-          role: (supabaseUser.user_metadata.role as Role) || 'USER',
+          name: (supabaseUser.user_metadata.full_name as string) || 'User',
+          role: (supabaseUser.user_metadata.role as Role) || 'STUDENT',
           statutCompte: 'ACTIF',
           emailVerifiedAt: new Date(),
           preferences: {
@@ -141,7 +145,7 @@ export const requireAdmin = requireRole('ADMIN');
 /**
  * User or Admin middleware
  */
-export const requireUser = requireRole('USER', 'ADMIN');
+export const requireUser = requireRole('STUDENT', 'ADMIN');
 
 /**
  * Check if user can access resource (own resource or admin)
